@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sistem Monitoring Lansia</title>
+
+    <!-- Bootstrap CSS -->
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+
+    <!-- Bootstrap Icon -->
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css"
+    />
+
+    <style>
+      body {
+        background: #f4f6fb;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      }
+      .summary-box {
+        border-radius: 12px;
+        padding: 18px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        background: #fff;
+      }
+      .summary-icon {
+        font-size: 2rem;
+      }
+      .summary-title {
+        font-size: 0.85rem;
+        color: #6c757d;
+        margin-bottom: 2px;
+      }
+      .summary-value {
+        font-size: 1.4rem;
+        font-weight: 700;
+        margin: 0;
+      }
+      .btn-sos {
+        padding: 12px 20px;
+        font-size: 1.1rem;
+        font-weight: 700;
+        border-radius: 10px;
+        text-transform: uppercase;
+      }
+      .card {
+        border: none;
+        border-radius: 12px;
+      }
+      .profile-img {
+        width: 85px;
+        height: 85px;
+        object-fit: cover;
+        border-radius: 12px;
+      }
+      .info-table td {
+        padding: 6px 0;
+        vertical-align: middle;
+        border: none;
+      }
+      .info-title {
+        font-weight: 600;
+        font-size: 0.9rem;
+      }
+      .info-value {
+        text-align: right;
+        font-size: 0.9rem;
+        font-weight: 500;
+      }
+
+      /* Warna Khusus */
+      .icon-red {
+        color: #e63946;
+      }
+      .icon-blue {
+        color: #457b9d;
+      }
+      .icon-blue-dark {
+        color: #1d3557;
+      }
+      .icon-purple {
+        color: #6c5ce7;
+      }
+      .icon-orange {
+        color: #f39c12;
+      }
+      .icon-yellow {
+        color: #f1c40f;
+      }
+
+      /* Grafik Container */
+      .chart-container {
+        position: relative;
+        height: 180px; /* Tinggi disesuaikan agar pas */
+        width: 100%;
+      }
+
+      /* Alert Style */
+      #system-alert {
+        z-index: 9999;
+        min-width: 300px;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ALERT PERINGATAN (Floating) -->
+    <div
+      id="system-alert"
+      class="alert alert-danger alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3 d-none shadow-lg"
+      role="alert"
+    >
+      <div class="d-flex align-items-center">
+        <i class="bi bi-exclamation-triangle-fill fs-4 me-3"></i>
+        <div>
+          <strong class="d-block">PERINGATAN DARURAT!</strong>
+          <div id="alert-message" class="small"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SUMMARY CARDS -->
+    <div class="container mt-4">
+      <div class="row g-3">
+        <div class="col-md-3 col-6">
+          <div class="summary-box shadow-sm">
+            <i class="bi bi-people-fill summary-icon icon-blue-dark"></i>
+            <div>
+              <p class="summary-title">Jumlah Pasien</p>
+              <p class="summary-value">1</p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3 col-6">
+          <div class="summary-box shadow-sm">
+            <i
+              class="bi bi-exclamation-triangle-fill summary-icon icon-orange"
+            ></i>
+            <div>
+              <p class="summary-title">Total Jatuh</p>
+              <p class="summary-value text-warning" id="total_jatuh">0</p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3 col-6">
+          <div class="summary-box shadow-sm">
+            <i class="bi bi-lightning-charge-fill summary-icon icon-red"></i>
+            <div>
+              <p class="summary-title">Total Pingsan</p>
+              <p class="summary-value text-danger" id="total_pingsan">0</p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3 col-12">
+          <button
+            class="btn btn-danger w-100 h-100 btn-sos shadow-sm d-flex align-items-center justify-content-center"
+          >
+            <i class="bi bi-bell-fill me-2"></i> SOS
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MAIN MONITORING SECTION -->
+    <div class="container mt-4">
+      <div class="row align-items-stretch">
+        <!-- KOLOM KIRI: PROFIL & STATUS -->
+        <div class="col-md-4 mb-4">
+          <div class="card shadow-sm p-3 h-100">
+            <div class="d-flex align-items-center gap-3 mb-3">
+              <img src="lansia-1.png" class="profile-img border" alt="Profil" />
+              <div>
+                <h5 class="fw-bold mb-0">Ibu Lansia 1</h5>
+                <p class="text-muted small mb-0">R. Sahabat 1A • 50 Thn • Pr</p>
+              </div>
+            </div>
+
+            <hr class="my-2" />
+
+            <h6 class="fw-bold small mb-2 text-uppercase text-secondary">
+              Data Kesehatan
+            </h6>
+            <table class="table info-table mb-3">
+              <tbody>
+                <tr>
+                  <td class="info-title">
+                    <i class="bi bi-heart-pulse me-2 icon-red"></i>BPM
+                  </td>
+                  <td class="info-value" id="bpm">--</td>
+                </tr>
+                <tr>
+                  <td class="info-title">
+                    <i class="bi bi-droplet me-2 icon-blue"></i>SpO2
+                  </td>
+                  <td class="info-value" id="spo2">--%</td>
+                </tr>
+                <tr>
+                  <td class="info-title">
+                    <i class="bi bi-heart-fill me-2 icon-red"></i>Kondisi
+                    Jantung
+                  </td>
+                  <td class="info-value" id="kondisi_jantung">--</td>
+                </tr>
+                <tr>
+                  <td class="info-title">
+                    <i class="bi bi-wind me-2 icon-blue-dark"></i>Kondisi SpO2
+                  </td>
+                  <td class="info-value" id="kondisi_spo2">--</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <h6 class="fw-bold small mb-2 text-uppercase text-secondary">
+              Status Sistem
+            </h6>
+            <table class="table info-table">
+              <tbody>
+                <tr>
+                  <td class="info-title">
+                    <i class="bi bi-bell me-2 icon-red"></i>SOS
+                  </td>
+                  <td class="info-value" id="status_sos">Normal</td>
+                </tr>
+                <tr>
+                  <td class="info-title">
+                    <i class="bi bi-exclamation-circle me-2 icon-yellow"></i
+                    >Jatuh
+                  </td>
+                  <td class="info-value" id="status_jatuh">Normal</td>
+                </tr>
+                <tr>
+                  <td class="info-title">
+                    <i class="bi bi-lightning-fill me-2 icon-blue"></i>Pingsan
+                  </td>
+                  <td class="info-value" id="status_pingsan">Normal</td>
+                </tr>
+                <tr>
+                  <td class="info-title">
+                    <i class="bi bi-activity me-2 icon-red"></i>Cemas/kelelahan
+                  </td>
+                  <td class="info-value">Normal</td>
+                </tr>
+                <tr>
+                  <td class="info-title">
+                    <i class="bi bi-heart-pulse me-2 icon-blue"></i>Hipoksemia
+                  </td>
+                  <td class="info-value">Normal</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div class="mt-auto pt-3 border-top">
+              <p class="text-muted small mb-0" style="font-size: 0.75rem">
+                <i class="bi bi-clock-history me-1"></i> Update:
+                <span id="last_update">--</span>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- KOLOM KANAN: GRAFIK & RIWAYAT -->
+        <div class="col-md-8 mb-4">
+          <div class="card shadow-sm p-3 h-100 d-flex flex-column">
+            <!-- GRAFIK -->
+            <div class="row g-2 mb-4">
+              <div class="col-md-6">
+                <div class="chart-container">
+                  <canvas id="bpmChart"></canvas>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="chart-container">
+                  <canvas id="spo2Chart"></canvas>
+                </div>
+              </div>
+            </div>
+
+            <h6 class="fw-bold mb-3 text-secondary">
+              <i class="bi bi-list-ul me-2"></i>Riwayat Data
+            </h6>
+
+            <div class="table-responsive flex-grow-1">
+              <table
+                class="table table-sm table-hover table-bordered text-center align-middle"
+                style="font-size: 0.85rem"
+              >
+                <thead class="table-dark">
+                  <tr>
+                    <th>No</th>
+                    <th>Waktu</th>
+                    <th>BPM</th>
+                    <th>SpO2</th>
+                    <th>Jantung</th>
+                    <th>Kondisi SpO2</th>
+                  </tr>
+                </thead>
+                <tbody id="data_riwayat">
+                  <!-- Rendered by JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SECTION ANALISIS DATA KESEHATAN -->
+    <div class="container mt-3">
+      <div class="mb-3">
+        <h4 class="fw-bold">Analisis Data Kesehatan</h4>
+        <p class="text-muted">
+          Informasi interpretasi BPM dan SpO2 untuk membantu pemantauan kondisi
+          pasien
+        </p>
+      </div>
+      <hr />
+      <div class="row g-4 mb-5 align-items-stretch">
+        <!-- BPM CARD -->
+        <div class="col-md-6">
+          <div class="card shadow-sm p-4 h-100">
+            <h5 class="fw-bold mb-3">
+              <i class="bi bi-heart-pulse me-2 icon-red"></i> Analisis BPM
+              (Detak Jantung)
+            </h5>
+            <ul class="list-group list-group-flush">
+              <li
+                class="list-group-item d-flex justify-content-between align-items-center"
+              >
+                <span>Normal</span> <span class="fw-bold">60 - 100 BPM</span>
+              </li>
+              <li
+                class="list-group-item d-flex justify-content-between align-items-center"
+              >
+                <span>Tidur</span> <span class="fw-bold">50 - 65 BPM</span>
+              </li>
+              <li
+                class="list-group-item d-flex justify-content-between align-items-center"
+              >
+                <span>Cemas</span> <span class="fw-bold">> 100 BPM</span>
+              </li>
+              <li
+                class="list-group-item d-flex justify-content-between align-items-center"
+              >
+                <span>Kelelahan</span> <span class="fw-bold">< 55 BPM</span>
+              </li>
+            </ul>
+            <p class="mt-3 text-muted small">
+              Keterangan: Max30105 membaca pola detak jantung dan kadar oksigen
+              menggunakan LED merah/IR untuk mengukur perubahan intensitas
+              cahaya pada aliran darah.
+            </p>
+          </div>
+        </div>
+        <!-- SpO2 CARD -->
+        <div class="col-md-6">
+          <div class="card shadow-sm p-4 h-100">
+            <h5 class="fw-bold mb-3">
+              <i class="bi bi-droplet me-2 icon-blue-dark"></i> Analisis SpO2
+              (Oksigen Darah)
+            </h5>
+            <ul class="list-group list-group-flush">
+              <li
+                class="list-group-item d-flex justify-content-between align-items-center"
+              >
+                <span>Normal</span> <span class="fw-bold">95% - 100%</span>
+              </li>
+              <li
+                class="list-group-item d-flex justify-content-between align-items-center"
+              >
+                <span>Rendah</span> <span class="fw-bold">90% - 94%</span>
+              </li>
+              <li
+                class="list-group-item d-flex justify-content-between align-items-center"
+              >
+                <span>Hipoksemia</span> <span class="fw-bold">< 90%</span>
+              </li>
+            </ul>
+            <p class="mt-3 text-muted small">
+              Keterangan: Nilai SpO2 menunjukkan seberapa optimal oksigen
+              diserap tubuh. <br />
+              <span class="text-danger fw-bold">Hipoksemia</span> dapat
+              menyebabkan pusing, lemas, hingga pingsan.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scripts -->
+    <script type="module" src="firebase1.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+      const chartOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            display: true,
+            position: "top",
+            labels: { boxWidth: 10, font: { size: 10 } },
+          },
+        },
+        scales: {
+          x: { ticks: { font: { size: 9 } } },
+          y: { beginAtZero: true, ticks: { font: { size: 9 } } },
+        },
+      };
+
+      const ctxBpm = document.getElementById("bpmChart").getContext("2d");
+      window.bpmChart = new Chart(ctxBpm, {
+        type: "line",
+        data: {
+          labels: [],
+          datasets: [
+            {
+              label: "Detak Jantung (BPM)",
+              data: [],
+              borderColor: "#e63946",
+              backgroundColor: "rgba(230, 57, 70, 0.1)",
+              fill: true,
+              tension: 0.4,
+            },
+          ],
+        },
+        options: chartOptions,
+      });
+
+      const ctxSpo2 = document.getElementById("spo2Chart").getContext("2d");
+      window.spo2Chart = new Chart(ctxSpo2, {
+        type: "line",
+        data: {
+          labels: [],
+          datasets: [
+            {
+              label: "Oksigen (SpO2 %)",
+              data: [],
+              borderColor: "#457b9d",
+              backgroundColor: "rgba(69, 123, 157, 0.1)",
+              fill: true,
+              tension: 0.4,
+            },
+          ],
+        },
+        options: chartOptions,
+      });
+    </script>
+  </body>
+</html>
