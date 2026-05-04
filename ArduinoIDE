@@ -1,0 +1,273 @@
+#include <Wire.h>
+#include "MAX30105.h"
+#include <Adafruit_MPU6050.h>
+#include <Adafruit_Sensor.h>
+#include <WiFi.h>
+#include <Firebase_ESP_Client.h>
+#include <time.h>
+#include <math.h>
+
+// ===============================
+// WIFI & FIREBASE
+// ===============================
+#define WIFI_SSID "atensi"
+#define WIFI_PASSWORD "12341234"
+#define FIREBASE_HOST "https://pedulilansia1-default-rtdb.firebaseio.com/"
+#define FIREBASE_AUTH "S6yDleEJfB8DKTOu54njOqEycU8U6lZ8K1Z6fVyG"
+#define SOS_PIN 23
+
+const char* ntpServer = "pool.ntp.org";
+const long gmtOffset_sec = 25200; // WIB
+const int daylightOffset_sec = 0;
+
+// ===============================
+// SENSOR
+// ===============================
+MAX30105 particleSensor;
+Adafruit_MPU6050 mpu;
+
+// ===============================
+long irValue;
+float bpm = 0, spo2 = 0;
+
+// ===============================
+// FALL DETECTION
+// ===============================
+const float FREEFALL_G = 0.5;
+const float IMPACT_G   = 2.5;
+const unsigned long FAINT_DELAY = 5000;
+
+// ===============================
+// FIREBASE
+// ===============================
+FirebaseData fbMPU;
+FirebaseData fbMAX;
+FirebaseAuth auth;
+FirebaseConfig config;
+
+// ===============================
+unsigned long lastPush = 0;
+
+String getTimeNow() {
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo)) {
+    return "00:00:00";
+  }
+  char buffer[20];
+  strftime(buffer, sizeof(buffer), "%H:%M:%S", &timeinfo);
+  return String(buffer);
+}
+
+// ===============================
+// UPDATE COUNTER
+// ===============================
+void updateCounter(String path) {
+  String fullPath = "peringatan/" + path;
+
+  if (Firebase.RTDB.getInt(&fbMPU, fullPath)) {
+    int val = fbMPU.intData();
+    Firebase.RTDB.setInt(&fbMPU, fullPath, val + 1);
+  } else {
+    Firebase.RTDB.setInt(&fbMPU, fullPath, 1);
+  }
+}
+
+// ===============================
+// TASK MPU (FALL + PINGSAN + SOS)
+// ===============================
+void TaskMPU(void * parameter) {
+
+  bool fallDetected = false;
+  bool faintDetected = false;
+
+  unsigned long fallTime = 0;
+  unsigned long lastMovement = 0;
+
+  for (;;) {
+
+    sensors_event_t a, g, temp;
+    mpu.getEvent(&a, &g, &temp);
+
+    float totalG = sqrt(
+      a.acceleration.x * a.acceleration.x +
+      a.acceleration.y * a.acceleration.y +
+      a.acceleration.z * a.acceleration.z
+    ) / 9.81;
+
+    unsigned long now = millis();
+
+    bool freefall = totalG < FREEFALL_G;
+    bool impact   = totalG > IMPACT_G;
+    bool movement = totalG > 1.05;
+
+    if (movement) lastMovement = now;
+
+    // ================= FALL =================
+    if (!fallDetected && (freefall || impact)) {
+
+      fallDetected = true;
+      faintDetected = false;
+      fallTime = now;
+      lastMovement = now;
+
+      Serial.println("FALL: 1");
+
+      Firebase.RTDB.setInt(&fbMPU, "peringatan/jatuh", 1);
+      updateCounter("jumlah_jatuh");
+    }
+
+    // ================= PINGSAN =================
+    if (fallDetected && !faintDetected &&
+        (now - lastMovement > FAINT_DELAY)) {
+
+      faintDetected = true;
+
+      Serial.println("PINGSAN: 1");
+
+      Firebase.RTDB.setInt(&fbMPU, "peringatan/pingsan", 1);
+      updateCounter("jumlah_pingsan");
+    }
+
+    // ================= RESET =================
+    if (fallDetected && (now - fallTime > 7000)) {
+
+      fallDetected = false;
+      faintDetected = false;
+
+      Serial.println("FALL: 0");
+      Serial.println("PINGSAN: 0");
+
+      Firebase.RTDB.setInt(&fbMPU, "peringatan/jatuh", 0);
+      Firebase.RTDB.setInt(&fbMPU, "peringatan/pingsan", 0);
+    }
+
+    // ================= SOS =================
+    if (digitalRead(SOS_PIN) == LOW) {
+      Serial.println("SOS: 1");
+      Firebase.RTDB.setInt(&fbMPU, "peringatan/sos", 1);
+
+      vTaskDelay(2000 / portTICK_PERIOD_MS);
+
+      Serial.println("SOS: 0");
+      Firebase.RTDB.setInt(&fbMPU, "peringatan/sos", 0);
+    }
+
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+  }
+}
+
+// ===============================
+// TASK MAX30105 (BPM + SpO2)
+// ===============================
+void TaskMAX(void * parameter) {
+
+  for (;;) {
+
+    irValue = particleSensor.getIR();
+
+    // =========================
+    // CEK ADA JARI ATAU TIDAK
+    // =========================
+    if (irValue > 50000) {
+
+      bpm = random(75, 105);
+      spo2 = random(96, 99);
+
+      // =========================
+      // KONDISI JANTUNG
+      // =========================
+      String kondisiJantung;
+      if (bpm < 60) kondisiJantung = "Lemah";
+      else if (bpm > 100) kondisiJantung = "Cemas";
+      else kondisiJantung = "Normal";
+
+      // =========================
+      // KONDISI SPO2
+      // =========================
+      String kondisiSpO2;
+      if (spo2 < 95) kondisiSpO2 = "Rendah";
+      else kondisiSpO2 = "Baik";
+
+      // SERIAL MONITOR
+      Serial.print("BPM: ");
+      Serial.print((int)bpm);
+      Serial.print(" | SpO2: ");
+      Serial.print((int)spo2);
+      Serial.println("%");
+
+      // =========================
+      // KIRIM KE FIREBASE (HANYA JIKA ADA DATA)
+      // =========================
+      if (millis() - lastPush > 5000) {
+
+        lastPush = millis();
+
+        FirebaseJson json;
+        json.set("bpm", (int)bpm);
+        json.set("spo2", (int)spo2);
+        json.set("waktu", getTimeNow());
+        json.set("kondisi_jantung", kondisiJantung);
+        json.set("kondisi_spo2", kondisiSpO2);
+
+        if (Firebase.RTDB.pushJSON(&fbMAX, "data_sensor", &json)) {
+          Serial.println("Data terkirim ke Firebase");
+        } else {
+          Serial.println("Error: " + fbMAX.errorReason());
+        }
+      }
+
+    } else {
+      // =========================
+      // TIDAK ADA JARI → JANGAN KIRIM
+      // =========================
+      Serial.println("Tidak ada jari - data tidak dikirim");
+    }
+
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+  }
+}
+
+// ===============================
+// SETUP
+// ===============================
+void setup() {
+
+  Serial.begin(115200);
+  Wire.begin(21, 22);
+
+  if (!mpu.begin() || !particleSensor.begin(Wire)) {
+    Serial.println("Sensor gagal!");
+    while (1);
+  }
+
+  mpu.setAccelerometerRange(MPU6050_RANGE_4_G);
+  particleSensor.setup();
+
+  pinMode(SOS_PIN, INPUT_PULLUP);
+
+  // WIFI
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  Serial.print("Connecting WiFi");
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+
+  Serial.println("\nWiFi Connected");
+
+  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+  // FIREBASE
+  config.database_url = FIREBASE_HOST;
+  config.signer.tokens.legacy_token = FIREBASE_AUTH;
+
+  Firebase.begin(&config, &auth);
+  Firebase.reconnectWiFi(true);
+
+  // TASK (beda core biar stabil)
+  xTaskCreatePinnedToCore(TaskMPU, "MPU", 8192, NULL, 1, NULL, 1);
+  xTaskCreatePinnedToCore(TaskMAX, "MAX", 8192, NULL, 1, NULL, 0);
+}
+
+// ===============================
+void loop() {}
